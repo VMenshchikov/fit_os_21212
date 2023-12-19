@@ -4,151 +4,53 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <pthread.h>
-#include <netdb.h>
 #include <poll.h>
 #include <sys/poll.h>
 
 #include "queue.h"
+#include "mypoll.h"
+#include "sockets.h"
+#include "threads.h"
 
-#define BUFFER_SIZE 1024
-
-
-typedef struct {
-    int client;
-    int server;
-} Sockets;
-
-
-int closeSockets(Sockets s) {
-    int i = 0;
-    if (s.client) {
-        i++;
-        close(s.client);
-    }
-    if (s.server) {
-        i++;
-        close(s.server);
-    }
-    return i;
-}
-
-
-void* connectionThread(void* arg) {
-    queue_t* newConnectQueue = (queue_t*) arg;
-
-    //ssize_t bytes_read;
-
-    
-
-    for (;;) {
-        Sockets newSockets;
-
-        queue_get(newConnectQueue, &newSockets);
-
-        char buffer[BUFFER_SIZE];
-        // Чтение запроса от клиента
-        while (( read(newSockets.client, buffer, BUFFER_SIZE)) > 0) {
-            // Отправка запроса на серверs
-            //write(server_socket, buffer, bytes_read);
-        }
-
-        int dnslen;
-        char* start, end;
-
-        start = strstr(buffer, "//");
-        if (!start) {
-            closeSockets(newSockets);
-            continue;
-        }
-        start+=2;
-
-        end = strchr(buffer, '/');
-        if (!end) {
-            closeSockets(newSockets);
-            continue;     
-        }
-        dnslen = start-end;
-
-        char* dns = (char*)malloc(dnslen+1);
-        strncpy(dns, start, dnslen);
-
-        
-        struct hostent *host_entry;
-        host_entry = gethostbyname(dns);
-        if (host_entry == NULL) {
-            closeSockets(newSockets);
-            continue; 
-        }
-
-
-        if (host_entry->h_addrtype != AF_INET) {
-            closeSockets(newSockets);
-            continue; 
-        }
-
-        struct in_addr addr;
-        memcpy(&addr, host_entry->h_addr_list[0], sizeof(struct in_addr));
-        
-        newSockets.server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-        if (newSockets.server == -1) {
-            closeSockets(newSockets);
-            continue;
-        }
-
-        struct sockaddr_in server;
-        server.sin_family = AF_INET;
-        server.sin_port = htons(80);
-        server.sin_addr = addr;
-
-        if (connect(newSockets.server, (struct sockaddr*)&server, sizeof(server)) == -1) {
-            closeSockets(newSockets);
-            continue;
-        }
-
-        int sended = 0;
-        while ( sended != strlen(buffer)) {
-            int n = send(newSockets.server, buffer, strlen(buffer), 0);
-            if (n == -1) {
-                sended = -1;
-                break;
-            }
-            sended+=n;
-        }
-        if (sended == -1) {
-            closeSockets(newSockets);
-            continue;
-        }
-        memset(buffer, 0, BUFFER_SIZE);
-        
-        int recived; 
-        while (!(recived = recv(newSockets.client, buffer, BUFFER_SIZE, 0))) {
-            if (recived == -1) {
-                closeSockets;
-                break;
-            }
-            send(newSockets.server, buffer, recived, 0);
-        }
-
-        
-        
-
-    }
-
-    return NULL;
-}
+#define POOL_THREADS 10
+#define START_CAP_POLL 100
 
 int main(){
 
     queue_t newConnections;
+    //закинул в ноду аргументы и указатель на функцию, 
+    //хотел сюда пихать функцию и запускать ее в треде,
+    //но в итоге эта функция лежит в самом треде
+    //(второй аргумент init)
     queue_init(&newConnections, NULL);
 
     pthread_t connThread;
     pthread_create(&connThread, NULL, connectionThread, &newConnections);
 
+    sPoll spoll;
+    sPollInit(&spoll, START_CAP_POLL);
 
-    pthread_mutex_t pollMutex = PTHREAD_MUTEX_INITIALIZER;
+    queue_t pool;
+    queue_init(&pool, NULL);
 
 
+    pthread_t conn_th;
+    pthread_t poll_th;
+    pthread_t pool_th[POOL_THREADS];
+
+    void* ptrsConn[2];
+    ptrsConn[0] = &newConnections;
+    ptrsConn[1] = &spoll;
+    pthread_create(conn_th, NULL, connectionThread, ptrsConn);
+
+    void* ptrsPoll[2];
+    ptrsConn[0] = &spoll;
+    ptrsConn[1] = &pool;
+    pthread_create(poll_th, NULL, connectionThread, ptrsConn);
+
+    for (int i = 0; i < POOL_THREADS; i++) {
+        pthread_create(pool_th, NULL, poolThread, &pool);
+    }
 
     // Создаем сокет
     int server_socket = socket(AF_INET, SOCK_STREAM, 0);
