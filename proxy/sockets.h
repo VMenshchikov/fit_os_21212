@@ -1,4 +1,5 @@
-typedef struct {
+#pragma once
+typedef struct _sockets{
     int client;
     int server;
 } Sockets;

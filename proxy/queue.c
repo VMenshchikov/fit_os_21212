@@ -9,8 +9,7 @@ void mutex_unlock_for_wait(void *arg) {
 	pthread_mutex_unlock(q->mutex);
 }
 
-queue_t* queue_init(int max_count, void* (*func) ) {
-	int err;
+queue_t* queue_init(int max_count, void* (*func)(void*) ) {
 
 	queue_t *q = malloc(sizeof(queue_t));
 	if (!q) {
@@ -19,7 +18,7 @@ queue_t* queue_init(int max_count, void* (*func) ) {
 	}
 	
 	q->mutex = malloc(sizeof(pthread_mutex_t));
-	if (!q) {
+	if (!q->mutex) {
 		printf("Cannot allocate memory for a mutex\n");
 		abort();
 	}
@@ -27,7 +26,7 @@ queue_t* queue_init(int max_count, void* (*func) ) {
 
 
 	q->cond = malloc(sizeof(pthread_cond_t));
-	if (!q) {
+	if (!q->cond) {
 		printf("Cannot allocate memory for a mutex\n");
 		abort();
 	}
@@ -81,6 +80,9 @@ int queue_add(queue_t *q, void* arg) {
 		pthread_mutex_unlock(q->mutex);
 		abort();
 	}
+
+	printf("добавляю %p\n", arg);
+
 	new->args = arg;
 	new->next = NULL;
 
@@ -98,7 +100,7 @@ int queue_add(queue_t *q, void* arg) {
 	return 1;
 }
 
-int queue_get(queue_t *q, void *args) {
+void queue_get(queue_t *q, void** ret) {
 	pthread_mutex_lock(q->mutex);
 	pthread_cleanup_push(mutex_unlock_for_wait, q);
 	while (!q->first) {
@@ -113,15 +115,16 @@ int queue_get(queue_t *q, void *args) {
 
 	qnode_t *tmp = q->first;
 
-	args = tmp->args;
-	q->first = q->first->next;
+	*ret = tmp->args;
 
+	printf("возвращаю %p\n", *ret);
+	q->first = q->first->next;
 	free(tmp);
 	pthread_mutex_unlock(q->mutex);
 	//pthread_cond_broadcast(q->cond);
 
 	pthread_cleanup_pop(0);
 
-	return 1;
+	return;
 }
 

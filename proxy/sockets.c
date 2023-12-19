@@ -1,4 +1,7 @@
+#include <unistd.h>
+
 #include "sockets.h"
+
 
 int closeSockets(Sockets s) {
     int i = 0;

@@ -15,20 +15,29 @@
 void* connectionThread(void* arg) {
     queue_t* newConnectQueue = (queue_t*) arg;
     sPoll* spoll = (sPoll*) (arg + sizeof(queue_t*));
-
     //ssize_t bytes_read;
 
     for (;;) {
-        Sockets* newSockets = (Sockets*)malloc(sizeof(Sockets));
-
-        queue_get(newConnectQueue, newSockets);
-
+        Sockets* newSockets;
+        queue_get(newConnectQueue, (void**)&newSockets);
+        printf("получил %p\n", newSockets);
         char buffer[BUFFER_SIZE];
         // Чтение запроса от клиента
-        while (( read(newSockets->client, buffer, BUFFER_SIZE)) > 0) {}
+        int readed;
+        printf("начал читать %d\n", newSockets->client);
+        if (( readed = read(newSockets->client, buffer, BUFFER_SIZE)) > 0) {
+            printf("прочитал %d: %s\n", readed, buffer);
+        }
+
+        if (readed == -1) {
+            printf("соединение разорвано");
+            closeSockets(*newSockets);
+            free(newSockets);
+            continue;
+        }
 
         int dnslen;
-        char* start, end;
+        char *start, *end;
 
         start = strstr(buffer, "//");
         if (!start) {
@@ -38,16 +47,20 @@ void* connectionThread(void* arg) {
         }
         start+=2;
 
-        end = strchr(buffer, '/');
+        end = strchr(start, '/');
         if (!end) {
             closeSockets(*newSockets);
             free(newSockets);
             continue;     
         }
-        dnslen = start-end;
+        dnslen = end-start;
+
+        
 
         char* dns = (char*)malloc(dnslen+1);
         strncpy(dns, start, dnslen);
+        
+        printf("dns %s\n", dns);
 
         
         struct hostent *host_entry;
@@ -68,6 +81,10 @@ void* connectionThread(void* arg) {
         struct in_addr addr;
         memcpy(&addr, host_entry->h_addr_list[0], sizeof(struct in_addr));
         
+        //char ip[100] = inet_ntoa(addr);
+        //    printf("ip %s\n", ip);
+
+
         newSockets->server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
         if (newSockets->server == -1) {
             closeSockets(*newSockets);
@@ -147,11 +164,10 @@ void* pollThread(void* arg){
 
 void* poolThread(void* arg) {
     queue_t* pool = (queue_t*) arg;
-
     for (;;) {
-        Sockets* soc;
-        queue_get(pool, soc);
         
+        Sockets* soc;
+        queue_get(pool, (void**)&soc);
 
         char buffer[BUFFER_SIZE];
         int recv;

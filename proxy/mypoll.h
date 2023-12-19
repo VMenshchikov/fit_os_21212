@@ -1,3 +1,4 @@
+#pragma once
 #define _GNU_SOURCE
 
 #include <poll.h>
@@ -5,10 +6,12 @@
 //#include <sys/poll.h>
 #include "sockets.h"
 
-typedef struct {
+typedef struct pollfd pollfd;
+
+typedef struct spoll{
     
-    struct pollfd *fds;
-    Sockets *socs;
+    pollfd *fds;
+    Sockets **socs;
 
 
     int size;

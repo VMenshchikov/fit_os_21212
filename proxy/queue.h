@@ -1,6 +1,4 @@
-#ifndef __FITOS_QUEUE_H__
-#define __FITOS_QUEUE_H__
-
+#pragma once
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,16 +18,15 @@ typedef struct _Queue {
 	qnode_t *first;
 	qnode_t *last;
 
-	void* (*routin)();
+	void* (*routin)(void*);
 
 	pthread_mutex_t *mutex;      
 	pthread_cond_t *cond;
 	
 } queue_t;
 
-queue_t* queue_init(int max_count, void* (*func));
+queue_t* queue_init(int max_count, void* (*func)(void*));
 void queue_destroy(queue_t *q);
 int queue_add(queue_t *q, void* args);
-int queue_get(queue_t *q, void* args);
+void queue_get(queue_t *q, void **ret);
 
-#endif		

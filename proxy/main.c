@@ -1,3 +1,5 @@
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,6 +8,7 @@
 #include <pthread.h>
 #include <poll.h>
 #include <sys/poll.h>
+#include <fcntl.h>
 
 #include "queue.h"
 #include "mypoll.h"
@@ -16,40 +19,40 @@
 #define START_CAP_POLL 100
 
 int main(){
+    
 
-    queue_t newConnections;
+    queue_t* newConnections;
     //закинул в ноду аргументы и указатель на функцию, 
     //хотел сюда пихать функцию и запускать ее в треде,
     //но в итоге эта функция лежит в самом треде
     //(второй аргумент init)
-    queue_init(&newConnections, NULL);
+    newConnections = queue_init(500, NULL);
 
-    pthread_t connThread;
-    pthread_create(&connThread, NULL, connectionThread, &newConnections);
 
     sPoll spoll;
     sPollInit(&spoll, START_CAP_POLL);
 
-    queue_t pool;
-    queue_init(&pool, NULL);
+    queue_t* pool;
+    pool = queue_init(500, NULL);
 
 
     pthread_t conn_th;
     pthread_t poll_th;
     pthread_t pool_th[POOL_THREADS];
 
+
     void* ptrsConn[2];
-    ptrsConn[0] = &newConnections;
+    ptrsConn[0] = newConnections;
     ptrsConn[1] = &spoll;
-    pthread_create(conn_th, NULL, connectionThread, ptrsConn);
+    pthread_create(&conn_th, NULL, connectionThread, *ptrsConn);
 
     void* ptrsPoll[2];
     ptrsConn[0] = &spoll;
-    ptrsConn[1] = &pool;
-    pthread_create(poll_th, NULL, connectionThread, ptrsConn);
+    ptrsConn[1] = pool;
+    pthread_create(&poll_th, NULL, connectionThread, *ptrsConn);
 
     for (int i = 0; i < POOL_THREADS; i++) {
-        pthread_create(pool_th, NULL, poolThread, &pool);
+        pthread_create(&pool_th[i], NULL, poolThread, pool);
     }
 
     // Создаем сокет
@@ -58,6 +61,23 @@ int main(){
         perror("Ошибка при создании сокета");
         exit(EXIT_FAILURE);
     }
+
+    // Устанавливаем блокирующий режим для чтения
+    int flags = fcntl(server_socket, F_GETFL, 0);
+    if (flags == -1) {
+        perror("Ошибка при получении флагов сокета");
+        close(server_socket);
+        return 1;
+    }
+
+    flags &= ~O_NONBLOCK;  // Сбрасываем флаг O_NONBLOCK
+
+    if (fcntl(server_socket, F_SETFL, flags) == -1) {
+        perror("Ошибка при установке блокирующего режима для сокета");
+        close(server_socket);
+        return 1;
+    }
+
 
     // Задаем адрес и порт для сервера
     struct sockaddr_in server_address;
@@ -93,7 +113,8 @@ int main(){
         Sockets* tmp = (Sockets*)malloc(sizeof(Sockets));
         tmp->client = client_socket;
         tmp->server = 0;
-        queue_add(&newConnections, tmp);
+        printf("создал %p\n", tmp);
+        queue_add(newConnections, tmp);
     }
     return EXIT_SUCCESS;
 }
