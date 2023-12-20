@@ -30,7 +30,6 @@ int main()
     printf("ПОлучил:%d\n", *((int*)ret));
     
     //free(ret);
-
-
+    
     return 0;
 }
