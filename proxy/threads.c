@@ -9,12 +9,18 @@
 #include "queue.h"
 #include "sockets.h"
 #include "mypoll.h"
+#include "threads.h"
 
 #define BUFFER_SIZE 1024
 
+
+
 void* connectionThread(void* arg) {
-    queue_t* newConnectQueue = (queue_t*) arg;
-    sPoll* spoll = (sPoll*) (arg + sizeof(queue_t*));
+    Data d = *(Data*)arg;
+
+    queue_t* newConnectQueue = d.queue;
+    sPoll* spoll = d.poll;
+    printf("socs перед пушем: %d %p\n", spoll->size, spoll->socs);
     //ssize_t bytes_read;
 
     for (;;) {
@@ -24,13 +30,13 @@ void* connectionThread(void* arg) {
         char buffer[BUFFER_SIZE];
         // Чтение запроса от клиента
         int readed;
-        printf("начал читать %d\n", newSockets->client);
+        //printf("начал читать %d\n", newSockets->client);
         if (( readed = read(newSockets->client, buffer, BUFFER_SIZE)) > 0) {
-            printf("прочитал %d: %s\n", readed, buffer);
+            //printf("прочитал %d: %s\n", readed, buffer);
         }
 
         if (readed == -1) {
-            printf("соединение разорвано");
+            printf("соединение разорвано\n");
             closeSockets(*newSockets);
             free(newSockets);
             continue;
@@ -62,46 +68,41 @@ void* connectionThread(void* arg) {
         
         printf("dns %s\n", dns);
 
-        
-        struct hostent *host_entry;
-        host_entry = gethostbyname(dns);
-        if (host_entry == NULL) {
-            closeSockets(*newSockets);
-            free(newSockets);
-            continue; 
+
+        const char *port = "80";
+        const char *path = "/";
+        // Получаем IP-адрес по доменному имени
+        struct addrinfo hints, *result, *rp;
+        memset(&hints, 0, sizeof(struct addrinfo));
+        hints.ai_family = AF_UNSPEC;
+        hints.ai_socktype = SOCK_STREAM;
+    
+        int status = getaddrinfo(dns, port, &hints, &result);
+        if (status != 0) {
+            fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(status));
+            exit(EXIT_FAILURE);
         }
 
+        // Перебираем результаты, используем первый подходящий IP-адрес
+        int soc = -1;
+        for (rp = result; rp != NULL; rp = rp->ai_next) {
+            soc = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+            if (soc == -1) {
+                continue; // Ошибка при создании сокета, пробуем следующий адрес
+            }
 
-        if (host_entry->h_addrtype != AF_INET) {
-            closeSockets(*newSockets);
-            free(newSockets);
-            continue; 
+            if (connect(soc, rp->ai_addr, rp->ai_addrlen) != -1) {
+                break; // Успешное соединение
+            }
+    
+            close(soc); // Ошибка соединения, закрываем сокет и пробуем следующий адрес
         }
 
-        struct in_addr addr;
-        memcpy(&addr, host_entry->h_addr_list[0], sizeof(struct in_addr));
-        
-        //char ip[100] = inet_ntoa(addr);
-        //    printf("ip %s\n", ip);
+        freeaddrinfo(result); // Освобождаем структуры addrinfo
 
+        newSockets->server = soc;
 
-        newSockets->server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-        if (newSockets->server == -1) {
-            closeSockets(*newSockets);
-            free(newSockets);
-            continue;
-        }
-
-        struct sockaddr_in server;
-        server.sin_family = AF_INET;
-        server.sin_port = htons(80);
-        server.sin_addr = addr;
-
-        if (connect(newSockets->server, (struct sockaddr*)&server, sizeof(server)) == -1) {
-            closeSockets(*newSockets);
-            free(newSockets);
-            continue;
-        }
+        printf("создал сокет %d\n", newSockets->server);
 
         int sended = 0;
         while ( sended != strlen(buffer)) {
@@ -118,9 +119,11 @@ void* connectionThread(void* arg) {
             continue;
         }
         memset(buffer, 0, BUFFER_SIZE);
+
+        printf("переслал\n");
         
-        int recived; 
-        while (!(recived = recv(newSockets->client, buffer, BUFFER_SIZE, 0))) {
+        /* int recived; 
+        while ((recived = recv(newSockets->client, buffer, BUFFER_SIZE, 0))) {
             if (recived == -1) {
                 closeSockets(*newSockets);
                 free(newSockets);
@@ -129,7 +132,10 @@ void* connectionThread(void* arg) {
             send(newSockets->server, buffer, recived, 0);
         }
 
-        if (recived == -1) continue;
+        if (recived == -1) continue; */
+
+        printf("кидаю в poll\n");
+
         
         sPollPush(spoll, newSockets);
 
@@ -138,8 +144,14 @@ void* connectionThread(void* arg) {
 }
 
 void* pollThread(void* arg){
-    sPoll* spoll = (sPoll*) arg;
-    queue_t* poolQueue = (queue_t*) (arg + sizeof(sPoll*));
+
+    Data d = *(Data*)arg;
+
+    queue_t* poolQueue = d.queue;
+    sPoll* spoll = d.poll;
+
+    //sPoll* spoll = (sPoll*) arg;
+    //queue_t* poolQueue = (queue_t*) (arg + sizeof(sPoll*));
 
     for (;;) {
         pthread_spin_lock(spoll->lock);
@@ -159,6 +171,7 @@ void* pollThread(void* arg){
                 queue_add(poolQueue, tmp);
             }
         }
+        pthread_spin_unlock(spoll->lock);
     } 
 }
 

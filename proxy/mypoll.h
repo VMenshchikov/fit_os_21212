@@ -21,7 +21,7 @@ typedef struct spoll{
 
 } sPoll;
 
-int sPollInit(sPoll *s, unsigned cap);
+sPoll* sPollInit(unsigned cap);
 int sPollExtension(sPoll *s);
 int sPollPush(sPoll *s, Sockets *soc);
 Sockets* sPollPop(sPoll *s, int ind);

@@ -15,7 +15,7 @@
 #include "sockets.h"
 #include "threads.h"
 
-#define POOL_THREADS 10
+#define POOL_THREADS 1
 #define START_CAP_POLL 100
 
 int main(){
@@ -29,8 +29,10 @@ int main(){
     newConnections = queue_init(500, NULL);
 
 
-    sPoll spoll;
-    sPollInit(&spoll, START_CAP_POLL);
+    sPoll *spoll;
+    spoll = sPollInit(START_CAP_POLL);
+
+    printf("main socs: %d %p\n", spoll->size, spoll->socs);
 
     queue_t* pool;
     pool = queue_init(500, NULL);
@@ -43,13 +45,23 @@ int main(){
 
     void* ptrsConn[2];
     ptrsConn[0] = newConnections;
-    ptrsConn[1] = &spoll;
-    pthread_create(&conn_th, NULL, connectionThread, *ptrsConn);
+    ptrsConn[1] = spoll;
 
-    void* ptrsPoll[2];
-    ptrsConn[0] = &spoll;
-    ptrsConn[1] = pool;
-    pthread_create(&poll_th, NULL, connectionThread, *ptrsConn);
+    Data d1;
+    d1.queue = newConnections;
+    d1.poll = spoll;
+
+    pthread_create(&conn_th, NULL, connectionThread, &d1);
+
+   /*  void* ptrsPoll[2];
+    ptrsPoll[0] = spoll;
+    ptrsPoll[1] = pool; */
+
+    Data d2;
+    d2.queue = pool;
+    d2.poll = spoll;
+
+    pthread_create(&poll_th, NULL, pollThread, &d2);
 
     for (int i = 0; i < POOL_THREADS; i++) {
         pthread_create(&pool_th[i], NULL, poolThread, pool);
@@ -113,7 +125,6 @@ int main(){
         Sockets* tmp = (Sockets*)malloc(sizeof(Sockets));
         tmp->client = client_socket;
         tmp->server = 0;
-        printf("создал %p\n", tmp);
         queue_add(newConnections, tmp);
     }
     return EXIT_SUCCESS;
