@@ -15,7 +15,7 @@
 #include "sockets.h"
 #include "threads.h"
 
-#define POOL_THREADS 1
+#define POOL_THREADS 10
 #define START_CAP_POLL 100
 
 int main(){
@@ -32,7 +32,6 @@ int main(){
     sPoll *spoll;
     spoll = sPollInit(START_CAP_POLL);
 
-    printf("main socs: %d %p\n", spoll->size, spoll->socs);
 
     queue_t* pool;
     pool = queue_init(500, NULL);

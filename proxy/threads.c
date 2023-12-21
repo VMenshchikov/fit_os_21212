@@ -11,7 +11,7 @@
 #include "mypoll.h"
 #include "threads.h"
 
-#define BUFFER_SIZE 1024
+#define BUFFER_SIZE 4096
 
 
 
@@ -20,19 +20,16 @@ void* connectionThread(void* arg) {
 
     queue_t* newConnectQueue = d.queue;
     sPoll* spoll = d.poll;
-    printf("socs перед пушем: %d %p\n", spoll->size, spoll->socs);
     //ssize_t bytes_read;
 
     for (;;) {
         Sockets* newSockets;
         queue_get(newConnectQueue, (void**)&newSockets);
-        printf("получил %p\n", newSockets);
         char buffer[BUFFER_SIZE];
         // Чтение запроса от клиента
         int readed;
         //printf("начал читать %d\n", newSockets->client);
         if (( readed = read(newSockets->client, buffer, BUFFER_SIZE)) > 0) {
-            //printf("прочитал %d: %s\n", readed, buffer);
         }
 
         if (readed == -1) {
@@ -66,7 +63,6 @@ void* connectionThread(void* arg) {
         char* dns = (char*)malloc(dnslen+1);
         strncpy(dns, start, dnslen);
         
-        printf("dns %s\n", dns);
 
 
         const char *port = "80";
@@ -80,7 +76,8 @@ void* connectionThread(void* arg) {
         int status = getaddrinfo(dns, port, &hints, &result);
         if (status != 0) {
             fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(status));
-            exit(EXIT_FAILURE);
+            close(newSockets->client);
+            continue;;
         }
 
         // Перебираем результаты, используем первый подходящий IP-адрес
@@ -102,8 +99,6 @@ void* connectionThread(void* arg) {
 
         newSockets->server = soc;
 
-        printf("создал сокет %d\n", newSockets->server);
-
         int sended = 0;
         while ( sended != strlen(buffer)) {
             int n = send(newSockets->server, buffer, strlen(buffer), 0);
@@ -120,23 +115,6 @@ void* connectionThread(void* arg) {
         }
         memset(buffer, 0, BUFFER_SIZE);
 
-        printf("переслал\n");
-        
-        /* int recived; 
-        while ((recived = recv(newSockets->client, buffer, BUFFER_SIZE, 0))) {
-            if (recived == -1) {
-                closeSockets(*newSockets);
-                free(newSockets);
-                break;
-            }
-            send(newSockets->server, buffer, recived, 0);
-        }
-
-        if (recived == -1) continue; */
-
-        printf("кидаю в poll\n");
-
-        
         sPollPush(spoll, newSockets);
 
     }

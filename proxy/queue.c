@@ -81,8 +81,6 @@ int queue_add(queue_t *q, void* arg) {
 		abort();
 	}
 
-	printf("добавляю %p\n", arg);
-
 	new->args = arg;
 	new->next = NULL;
 
@@ -117,7 +115,6 @@ void queue_get(queue_t *q, void** ret) {
 
 	*ret = tmp->args;
 
-	printf("возвращаю %p\n", *ret);
 	q->first = q->first->next;
 	free(tmp);
 	pthread_mutex_unlock(q->mutex);

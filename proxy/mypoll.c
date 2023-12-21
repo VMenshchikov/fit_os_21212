@@ -23,7 +23,6 @@ sPoll* sPollInit(unsigned cap) {
     s->socs = (Sockets**)malloc(sizeof(Sockets*) * cap);
     s->fds = (pollfd*)malloc(sizeof(pollfd) * cap);
     
-    printf("socs: %d %p\n", s->size, s->socs);
 
     return s;
 }
@@ -57,7 +56,6 @@ int sPollPush(sPoll *s, Sockets *soc) {
     //Sockets* tmp =  s->socs + sizeof(Sockets*) * s->size;
     //tmp = soc;
 
-    printf("socs: %d %p\n", s->size, s->socs);
 
     s->socs[s->size] = soc;
 
