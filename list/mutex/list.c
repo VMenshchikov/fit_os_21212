@@ -37,6 +37,9 @@ Node* createNode(int lenText) {
 Storage* initList(int cap) {
     Storage* ret = (Storage*)malloc(sizeof(Storage)); 
     if (ret == NULL) return NULL;
+    
+    srand(time(NULL));
+
     Node* node = createNode(rand()%100+1);
     if (node == NULL) {
         free(ret);

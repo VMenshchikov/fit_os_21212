@@ -28,7 +28,7 @@ void* swaper(void* arg) {
         if (nodes[1]->next != NULL) {
             pthread_mutex_lock(&nodes[1]->next->sync);
             nodes[2] = nodes[1]->next;
-            if (nodes[2] && rand() % 2) {
+            if (nodes[2]->next && rand() % 100 > 33) {
                 swap++;
                 nodes[0]->next = nodes[2];
                 nodes[1]->next = nodes[2]->next;
@@ -121,8 +121,3 @@ int main(int argc, char const *argv[])
 
     return 0;
 }
-
-
-        
-    pthread_mutex_unlock(&nodes[0]->sync);
-} 
