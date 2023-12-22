@@ -19,8 +19,36 @@ void* swaper(void* arg) {
     while(1){
 
 
-    pthread_mutex_lock(&storage->first->sync);
     Node* nodes[3];
+
+    pthread_mutex_lock(&storage->sync);
+    if (rand() % 100 > 33) {
+        if (storage->first != NULL) {
+            pthread_mutex_lock(&storage->first->sync);
+            nodes[0] = storage->first;
+            if (nodes[0]->next != NULL) {
+                pthread_mutex_lock(&nodes[0]->next->sync);
+                nodes[1] = nodes[0]->next;
+                if (nodes[0]->next != NULL) {
+                    nodes[2] = nodes[1]->next;
+
+                    storage->first = nodes[1];
+                    nodes[1]->next = nodes[0];
+                    nodes[0]->next=nodes[2];
+
+                    swap++;
+                }
+                pthread_mutex_unlock(&storage->first->next->sync);
+            }
+            //pthread_mutex_unlock(&nodes[0]->sync);
+        }
+        pthread_mutex_unlock(&storage->sync);
+    } else {
+        pthread_mutex_lock(&storage->first->sync);
+        pthread_mutex_unlock(&storage->sync);
+
+    }
+
     
     for (nodes[0] = storage->first; nodes[0]->next != NULL; nodes[0] = nodes[1]) {
         pthread_mutex_lock(&nodes[0]->next->sync);
@@ -40,7 +68,7 @@ void* swaper(void* arg) {
     }
         
     pthread_mutex_unlock(&nodes[0]->sync);
-    }
+    } 
 }
 
 void* seeker1(void* arg) {
@@ -107,8 +135,9 @@ int main(int argc, char const *argv[])
     pthread_create(&threads[4], NULL, seeker2, storage);
     pthread_create(&threads[5], NULL, seeker3, storage);
 
-    for (int i = 0; i < 500; i++) {
+    for (int i = 0; i < 15; i++) {
         printf("Перестановки:%d. Возрастает:%d. Убывает:%d. Равно:%d\n", swap, s1, s2, s3);
+        //printf("first: %p %s", storage->first, storage->first->value);
         sleep(1);
     }
 

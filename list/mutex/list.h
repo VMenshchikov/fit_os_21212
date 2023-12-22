@@ -7,6 +7,7 @@ typedef struct _Node {
 } Node;
 
 typedef struct _Storage {
+    pthread_mutex_t sync;
     Node *first;
 } Storage;
 

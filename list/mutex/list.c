@@ -18,6 +18,8 @@ void destroyList(Storage* storage) {
         node = tmp;
     }
 
+    pthread_mutex_destroy(&storage->sync);
+
     free(storage);
 }
 
@@ -37,6 +39,8 @@ Node* createNode(int lenText) {
 Storage* initList(int cap) {
     Storage* ret = (Storage*)malloc(sizeof(Storage)); 
     if (ret == NULL) return NULL;
+
+    pthread_mutex_init(&ret->sync, PTHREAD_MUTEX_DEFAULT);
     
     srand(time(NULL));
 
