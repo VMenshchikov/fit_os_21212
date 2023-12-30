@@ -17,7 +17,7 @@
 
 void* connectionThread(void* arg) {
     Data d = *(Data*)arg;
-
+    
     queue_t* newConnectQueue = d.queue;
     sPoll* spoll = d.poll;
     //ssize_t bytes_read;
@@ -25,17 +25,36 @@ void* connectionThread(void* arg) {
     for (;;) {
         Sockets* newSockets;
         queue_get(newConnectQueue, (void**)&newSockets);
-        char buffer[BUFFER_SIZE];
+        //char buffer[BUFFER_SIZE];
+        char *buffer = calloc(BUFFER_SIZE, 1);
         // Чтение запроса от клиента
-        int readed;
-        //printf("начал читать %d\n", newSockets->client);
-        if (( readed = read(newSockets->client, buffer, BUFFER_SIZE)) > 0) {
+        int readed, currentBufferSize, pos;
+        currentBufferSize = BUFFER_SIZE;
+
+        pos = 0;
+        while ((readed = read(newSockets->client, buffer+pos, BUFFER_SIZE)) > 0) {
+            if (strlen(buffer) == currentBufferSize) {
+                char* bufferTmp = realloc(buffer, currentBufferSize + BUFFER_SIZE);
+                if (!buffer) {
+                    free(buffer);
+                    closeSockets(*newSockets);
+                    free(newSockets);
+                    continue;
+                }
+                memset(buffer + BUFFER_SIZE, 0, BUFFER_SIZE);
+                currentBufferSize+=BUFFER_SIZE;
+                buffer = bufferTmp;
+            }
         }
+        
+
+        
 
         if (readed == -1) {
             printf("соединение разорвано\n");
             closeSockets(*newSockets);
             free(newSockets);
+            free(buffer);
             continue;
         }
 
@@ -46,6 +65,7 @@ void* connectionThread(void* arg) {
         if (!start) {
             closeSockets(*newSockets);
             free(newSockets);
+            free(buffer);
             continue;
         }
         start+=2;
@@ -54,6 +74,7 @@ void* connectionThread(void* arg) {
         if (!end) {
             closeSockets(*newSockets);
             free(newSockets);
+            free(buffer);
             continue;     
         }
         dnslen = end-start;
@@ -70,14 +91,16 @@ void* connectionThread(void* arg) {
         // Получаем IP-адрес по доменному имени
         struct addrinfo hints, *result, *rp;
         memset(&hints, 0, sizeof(struct addrinfo));
-        hints.ai_family = AF_UNSPEC;
+        hints.ai_family = AF_INET;
         hints.ai_socktype = SOCK_STREAM;
     
         int status = getaddrinfo(dns, port, &hints, &result);
         if (status != 0) {
             fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(status));
-            close(newSockets->client);
-            continue;;
+            closeSockets(*newSockets);
+            free(newSockets);
+            free(buffer);
+            continue;
         }
 
         // Перебираем результаты, используем первый подходящий IP-адрес
@@ -93,6 +116,10 @@ void* connectionThread(void* arg) {
             }
     
             close(soc); // Ошибка соединения, закрываем сокет и пробуем следующий адрес
+            closeSockets(*newSockets);
+            free(newSockets);
+            free(buffer);
+            fprintf(stderr, "нет подходящих адресов");
         }
 
         freeaddrinfo(result); // Освобождаем структуры addrinfo
@@ -111,10 +138,12 @@ void* connectionThread(void* arg) {
         if (sended == -1) {
             closeSockets(*newSockets);
             free(newSockets);
+            free(buffer);
             continue;
         }
-        memset(buffer, 0, BUFFER_SIZE);
+        //memset(buffer, 0, BUFFER_SIZE);
 
+        free(buffer);
         sPollPush(spoll, newSockets);
 
     }
