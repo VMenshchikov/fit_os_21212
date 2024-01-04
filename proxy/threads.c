@@ -91,7 +91,7 @@ void* connectionThread(void* arg) {
         // Получаем IP-адрес по доменному имени
         struct addrinfo hints, *result, *rp;
         memset(&hints, 0, sizeof(struct addrinfo));
-        hints.ai_family = AF_INET;
+        hints.ai_family = AF_UNSPEC;
         hints.ai_socktype = SOCK_STREAM;
     
         int status = getaddrinfo(dns, port, &hints, &result);
@@ -116,13 +116,19 @@ void* connectionThread(void* arg) {
             }
     
             close(soc); // Ошибка соединения, закрываем сокет и пробуем следующий адрес
+            soc = -1;
+        }
+
+        freeaddrinfo(result); // Освобождаем структуры addrinfo
+
+        if (soc == -1) {
             closeSockets(*newSockets);
             free(newSockets);
             free(buffer);
             fprintf(stderr, "нет подходящих адресов");
+            continue;
         }
-
-        freeaddrinfo(result); // Освобождаем структуры addrinfo
+        
 
         newSockets->server = soc;
 
